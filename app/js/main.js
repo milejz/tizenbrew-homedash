@@ -439,7 +439,7 @@
             var btn = function (id, icon, label) {
                 return '<div class="mpill focusable" tabindex="0" data-app="' + id + '">' + icon + esc(label) + '</div>';
             };
-            html += '<div class="card mini music"><div class="mart"><iframe id="mframe" src="' + esc(CONFIG.music.playerUrl || '') +
+            html += '<div class="card mini music"><div class="mart"><iframe id="mframe" src="' + esc((CONFIG.music.playerUrl || '') + '?t=' + Date.now()) +
                 '" allow="autoplay; encrypted-media" frameborder="0" tabindex="-1"></iframe></div>' +
                 '<div class="minfo"><h2>' + esc(CONFIG.music.name || 'Musik') + '</h2>' +
                 '<div id="mtitle" class="mtitle"></div><div id="mauthor" class="mauthor"></div>' +
