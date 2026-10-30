@@ -439,7 +439,7 @@
             var btn = function (id, icon, label) {
                 return '<div class="mpill focusable" tabindex="0" data-app="' + id + '">' + icon + esc(label) + '</div>';
             };
-            html += '<div class="card mini music"><div class="mart"><iframe id="mframe" src="' + esc((CONFIG.music.playerUrl || '') + '?t=' + Date.now()) +
+            html += '<div class="card mini music"><div class="mart"><iframe id="mframe" src="' + esc((CONFIG.music.playerUrl || '') + '?t=' + Date.now() + (CONFIG.music.debug ? '&debug=1' : '')) +
                 '" allow="autoplay; encrypted-media" frameborder="0" tabindex="-1"></iframe></div>' +
                 '<div class="minfo"><h2>' + esc(CONFIG.music.name || 'Musik') + '</h2>' +
                 '<div id="mtitle" class="mtitle"></div><div id="mauthor" class="mauthor"></div>' +
@@ -492,6 +492,7 @@
         var d = e.data, f = $('mframe');
         if (!f || e.source !== f.contentWindow || e.origin !== playerOrigin()) return;
         if (!d || d.homedash !== 'player') return;
+        if (d.dbg) { $('mtitle').textContent = d.dbg; return; }
         if (d.state === -2) { // player page ready: cue the last song (or the configured link)
             var l = lastPlayed(), ml = musicLink();
             return playerCmd(l && l.id ? { cmd: 'load', v: l.id, list: 'RD' + l.id } : { cmd: 'load', v: ml.v, list: ml.list });

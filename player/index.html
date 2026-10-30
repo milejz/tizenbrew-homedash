@@ -15,7 +15,7 @@
 var player = null, ready = false, pending = null;
 // Ads can't be skipped from here (the Skip button is inside YouTube's frame), but while an ad plays the
 // song's own position stays frozen although the player says "playing": mute until the song really runs.
-var adMuted = false;
+var adMuted = false, DEBUG = /[?&]debug=1/.test(location.search);
 function watchAds() {
     var lastT = -1, frozen = 0;
     setInterval(function () {
@@ -25,6 +25,7 @@ function watchAds() {
         if (frozen >= 2 && !adMuted) { adMuted = true; player.mute(); send({ ad: true }); }
         else if (adMuted && st === 1 && t - lastT > 0.3) { adMuted = false; player.unMute(); send({ ad: false }); }
         lastT = t;
+        if (DEBUG) parent.postMessage({ homedash: 'player', dbg: 'st ' + st + ' t ' + t.toFixed(1) + ' d ' + Math.round(player.getDuration() || 0) + (adMuted ? ' AD' : '') }, '*');
     }, 1000);
 }
 function send(extra) {
