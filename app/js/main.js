@@ -444,7 +444,7 @@
                 '<div class="minfo"><h2>' + esc(CONFIG.music.name || 'Musik') + '</h2>' +
                 '<div id="mtitle" class="mtitle"></div><div id="mauthor" class="mauthor"></div>' +
                 '<div class="mctrl">' + btn(M.search, ICONS.search, 'Sök') +
-                ibtn(M.prev, ICONS.prev) + ibtn(M.pause, ICONS.play) + ibtn(M.next, ICONS.next) + btn(M.ad, ICONS.next, 'Reklam') +
+                ibtn(M.prev, ICONS.prev) + ibtn(M.pause, ICONS.play) + ibtn(M.next, ICONS.next) +
                 (musicLink().v || musicLink().list ? btn(M.play, ICONS.music, CONFIG.music.playLabel || 'Min lista') : '') +
                 '</div></div></div>';
         }
@@ -459,8 +459,8 @@
     // Music card: YouTube's embedded player, shown in the card. It lives in player/index.html on an https
     // host (YouTube refuses to embed in the file:// app); we drive it with postMessage and it reports
     // state/title back. The last song is remembered (localStorage) and cued on start.
-    var M = { search: '#msearch', play: '#mplay', last: '#mlast', pause: '#mpause', next: '#mnext', prev: '#mprev', ad: '#mad' };
-    var mState = -1, adTimer = null;
+    var M = { search: '#msearch', play: '#mplay', last: '#mlast', pause: '#mpause', next: '#mnext', prev: '#mprev' };
+    var mState = -1;
     function musicLink() {
         var link = String(CONFIG.music.link || '');
         var v = /[?&]v=([\w-]+)/.exec(link), list = /[?&]list=([\w-]+)/.exec(link);
@@ -497,6 +497,7 @@
             return playerCmd(l && l.id ? { cmd: 'load', v: l.id, list: 'RD' + l.id } : { cmd: 'load', v: ml.v, list: ml.list });
         }
         mState = d.state;
+        if (typeof d.ad === 'boolean') $('mframe').parentNode.className = d.ad ? 'mart ad' : 'mart';
         if (d.title) { $('mtitle').textContent = d.title; $('mauthor').textContent = d.author || ''; }
         setToggleIcon();
     });
@@ -505,23 +506,6 @@
         if (!v && !list) return;
         if (meta) { lastPlayed(meta); renderMusic(); }
         playerCmd({ cmd: 'load', v: v || '', list: list || '', autoplay: true });
-    }
-    // Ads: YouTube's "Skip ad" button is inside its own frame, so code can't press it. "Reklam" hands the
-    // remote to the player for a few seconds (arrows/OK act inside YouTube), then takes focus back.
-    function adMode() {
-        var f = $('mframe'), back = document.querySelector('[data-app="' + M.ad + '"]');
-        if (!f) return;
-        clearTimeout(adTimer);
-        $('mframe').parentNode.className = 'mart admode';
-        f.focus();
-        playerCmd({ cmd: 'focus' });
-        status('Reklam: använd pilarna och OK i spelaren (10 s)');
-        adTimer = setTimeout(function () {
-            $('mframe').parentNode.className = 'mart';
-            window.focus();
-            if (back) back.focus();
-            status('');
-        }, 10000);
     }
 
     // ---------- music search ----------
@@ -997,7 +981,6 @@
         if (id === M.pause) return playerCmd({ cmd: 'toggle' });
         if (id === M.next) return playerCmd({ cmd: 'next' });
         if (id === M.prev) return playerCmd({ cmd: 'prev' });
-        if (id === M.ad) return adMode();
         if (id === M.play) { var ml = musicLink(); return playSong(ml.v, ml.list); }
         if (id === M.search) return toggleSearch();
         if (id && id.indexOf(SEARCH_PREFIX) === 0) return playSearchResult(id.slice(SEARCH_PREFIX.length));

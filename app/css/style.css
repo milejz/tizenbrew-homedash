@@ -248,4 +248,6 @@ footer { display: flex; justify-content: space-between; font-size: 14px; color: 
 .mpill.icon svg { margin-right: 0; }
 .mpill.icon:first-of-type { margin-left: 6px; }
 .mart iframe { width: 100%; height: 100%; border: 0; display: block; }
-.mart.admode { box-shadow: 0 0 0 4px #fbbf24, 0 18px 40px rgba(0, 0, 0, .5); transform: scale(1.05); }
+.mart { position: relative; }
+.mart.ad:after { content: 'Reklam · ljud av'; position: absolute; left: 10px; top: 10px; padding: 4px 10px; border-radius: 10px;
+    font-size: 14px; font-weight: 700; background: rgba(251, 191, 36, .92); color: #1a1300; }

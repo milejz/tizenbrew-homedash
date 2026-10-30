@@ -13,6 +13,20 @@
 <div id="p"></div>
 <script>
 var player = null, ready = false, pending = null;
+// Ads can't be skipped from here (the Skip button is inside YouTube's frame), but while an ad plays the
+// song's own position stays frozen although the player says "playing": mute until the song really runs.
+var adMuted = false;
+function watchAds() {
+    var lastT = -1, frozen = 0;
+    setInterval(function () {
+        if (!ready) return;
+        var st = player.getPlayerState(), t = player.getCurrentTime() || 0;
+        frozen = st === 1 && Math.abs(t - lastT) < 0.05 ? frozen + 1 : 0;
+        if (frozen >= 2 && !adMuted) { adMuted = true; player.mute(); send({ ad: true }); }
+        else if (adMuted && st === 1 && t - lastT > 0.3) { adMuted = false; player.unMute(); send({ ad: false }); }
+        lastT = t;
+    }, 1000);
+}
 function send(extra) {
     var d = { homedash: 'player', state: player && ready ? player.getPlayerState() : -1, title: '', author: '' };
     try { var v = player.getVideoData(); d.title = v.title || ''; d.author = v.author || ''; } catch (e) { }
@@ -42,7 +56,7 @@ function onYouTubeIframeAPIReady() {
         width: '100%', height: '100%',
         playerVars: { controls: 0, rel: 0, playsinline: 1, modestbranding: 1, iv_load_policy: 3, fs: 0, disablekb: 1 },
         events: {
-            onReady: function () { ready = true; if (pending) load(pending); pending = null; send(); },
+            onReady: function () { ready = true; if (pending) load(pending); pending = null; send(); watchAds(); },
             onStateChange: function () { send(); },
             onError: function (e) { send({ error: e.data }); if (e.data === 101 || e.data === 150) player.nextVideo(); }
         }
