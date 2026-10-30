@@ -223,5 +223,3 @@ footer { display: flex; justify-content: space-between; font-size: 14px; color: 
 .fx-table tr.best td { background: rgba(52, 211, 153, .14); }
 .fx-table tr.best .diff { color: var(--green); font-weight: 700; }
 .fx-note { margin-top: 26px; font-size: 17px; line-height: 1.55; color: var(--text-3); }
-/* TEMP debug: big player */
-.mplayer { position: fixed; left: 160px; top: 90px; width: 1600px !important; height: 900px !important; z-index: 50; }

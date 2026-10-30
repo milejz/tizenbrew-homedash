@@ -33,7 +33,7 @@ var CONFIG = {
     // (YouTube won't embed in the file:// app). Full-screen button opens the same link in TizenTube.
     music: {
         name: 'Musik',
-        link: 'https://www.youtube.com/watch?v=jfKfPfyJRdk',
+        link: '', // set your own in local.js: CONFIG.music.link = 'https://music.youtube.com/playlist?list=...'
         playerUrl: 'https://milejz.github.io/tizenbrew-homedash/player/',
         autoplay: false
     },
