@@ -2,3 +2,4 @@ out/
 *.wgt
 node_modules/
 app/js/local.js
+.devtools/
