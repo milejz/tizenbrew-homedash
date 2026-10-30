@@ -524,7 +524,13 @@
             if (err || !sid || !gs) return cb(err || new Error('kunde inte ansluta till TizenTube'));
             postForm(base + p({ RID: 2, SID: sid[1], gsessionid: gs[1], AID: 5, zx: 'b' }), {
                 count: 1, ofs: 0, req0__sc: 'setPlaylist', req0_videoId: v || '', req0_listId: list || '', req0_currentTime: 0, req0_currentIndex: 0
-            }, cb);
+            }, function (e2) {
+                if (e2) return cb(e2);
+                // the TV loads the song paused (black screen); start it once it has loaded
+                setTimeout(function () {
+                    postForm(base + p({ RID: 3, SID: sid[1], gsessionid: gs[1], AID: 5, zx: 'c' }), { count: 1, ofs: 1, req0__sc: 'play' }, cb);
+                }, 3000);
+            });
         });
     }
     // Running TizenBrew: plain launch = bring to front (an app-control module request would make it reload
