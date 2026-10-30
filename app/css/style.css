@@ -241,3 +241,6 @@ footer { display: flex; justify-content: space-between; font-size: 14px; color: 
 .sres-meta { font-size: 15px; color: var(--text-3); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sres:focus { background: #fff; color: #0b0e15; transform: scale(1.04); box-shadow: 0 16px 34px rgba(0, 0, 0, .5); }
 .sres:focus .sres-meta { color: rgba(0, 0, 0, .55); }
+.pair-panel { left: 360px; top: 220px; width: 1200px; height: auto; }
+.pair-help { font-size: 20px; color: var(--text-2); margin: -6px 0 22px; line-height: 1.5; }
+.pair-help b { color: var(--text); }
