@@ -31,7 +31,7 @@ var CONFIG = {
     lunch: [], // e.g. [{ name: 'Skolan', school: 'skolans-url-namn' }]
     // Music card: YouTube's embedded player (with YouTube's ads). playerUrl = https copy of player/index.html
     // (YouTube won't embed in the file:// app). link = optional own playlist (set it in local.js).
-    music: { name: 'Musik', link: '', playLabel: 'Min lista', playerUrl: 'https://milejz.github.io/tizenbrew-homedash/player/' },
+    music: { name: 'Musik', link: '', playLabel: 'Min lista', playerUrl: 'https://milejz.github.io/tizenbrew-homedash/player/index.html' },
     air: true, // air quality + pollen card (Open-Meteo, uses location above)
 
     newsFeed: 'https://www.svt.se/rss.xml',
