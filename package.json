@@ -1,6 +1,6 @@
 {
   "name": "tizenbrew-homedash",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "TV dashboard + launcher: clock, weather, SL, elpris, warnings, rates, news, app grid",
   "packageType": "app",
   "appName": "HomeDash",

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<title>HomeDash player</title>
+<!-- YouTube embed host for HomeDash. The packaged .wgt is a file:// page, which YouTube refuses to embed
+     (error 153: no referrer), so HomeDash iframes this page from an https host instead.
+     Commands arrive by postMessage: {cmd:'load', v, list, autoplay} | {cmd:'toggle'|'next'|'prev'|'focus'}.
+     State goes back to the parent: {homedash:'player', state, title, author}. -->
+<style>html, body, #p { margin: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }</style>
+</head>
+<body>
+<div id="p"></div>
+<script>
+var player = null, ready = false, pending = null;
+function send(extra) {
+    var d = { homedash: 'player', state: player && ready ? player.getPlayerState() : -1, title: '', author: '' };
+    try { var v = player.getVideoData(); d.title = v.title || ''; d.author = v.author || ''; } catch (e) { }
+    for (var k in extra) d[k] = extra[k];
+    parent.postMessage(d, '*');
+}
+function load(m) {
+    if (!ready) { pending = m; return; }
+    if (m.list) player.loadPlaylist({ listType: 'playlist', list: m.list, index: 0 });
+    else if (m.v) player.loadVideoById(m.v);
+    if (!m.autoplay) setTimeout(function () { player.pauseVideo(); }, 1200); // cue only
+}
+window.addEventListener('message', function (e) {
+    if (e.source !== parent) return; // only HomeDash (our embedding page) may drive the player
+    var m = e.data;
+    if (!m || typeof m !== 'object' || !m.cmd || !player) return;
+    if (m.cmd === 'load') load(m);
+    else if (!ready) return;
+    else if (m.cmd === 'toggle') player.getPlayerState() === 1 ? player.pauseVideo() : player.playVideo();
+    else if (m.cmd === 'next') player.nextVideo();
+    else if (m.cmd === 'prev') player.previousVideo();
+    else if (m.cmd === 'focus') { try { player.getIframe().focus(); } catch (x) { } } // remote keys go into YouTube's player
+    send();
+});
+function onYouTubeIframeAPIReady() {
+    player = new YT.Player('p', {
+        width: '100%', height: '100%',
+        playerVars: { controls: 0, rel: 0, playsinline: 1, modestbranding: 1, iv_load_policy: 3, fs: 0, disablekb: 1 },
+        events: {
+            onReady: function () { ready = true; if (pending) load(pending); pending = null; send(); },
+            onStateChange: function () { send(); },
+            onError: function (e) { send({ error: e.data }); if (e.data === 101 || e.data === 150) player.nextVideo(); }
+        }
+    });
+    parent.postMessage({ homedash: 'player', state: -2 }, '*'); // loaded: parent may send 'load'
+}
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body>
+</html>

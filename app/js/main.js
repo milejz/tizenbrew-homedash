@@ -434,17 +434,18 @@
     function setupExtras() {
         var row = $('forecastCard').parentNode, box = document.createElement('section'), html = '';
         box.className = 'extras';
-        if (CONFIG.music) {
+        if (CONFIG.music && CONFIG.music.playerUrl) {
             var ibtn = function (id, icon) { return '<div class="mpill icon focusable" tabindex="0" data-app="' + id + '">' + icon + '</div>'; };
             var btn = function (id, icon, label) {
                 return '<div class="mpill focusable" tabindex="0" data-app="' + id + '">' + icon + esc(label) + '</div>';
             };
-            html += '<div class="card mini music"><div id="mart" class="mart"></div>' +
-                '<div class="minfo"><h2>' + esc(CONFIG.music.name || 'Musik') + ' <span class="hint">spelas i TizenTube · utan reklam</span></h2>' +
+            html += '<div class="card mini music"><div class="mart"><iframe id="mframe" src="' + esc(CONFIG.music.playerUrl || '') +
+                '" allow="autoplay; encrypted-media" frameborder="0" tabindex="-1"></iframe></div>' +
+                '<div class="minfo"><h2>' + esc(CONFIG.music.name || 'Musik') + '</h2>' +
                 '<div id="mtitle" class="mtitle"></div><div id="mauthor" class="mauthor"></div>' +
-                '<div class="mctrl">' + btn(M.last, ICONS.play, 'Spela') + btn(M.search, ICONS.search, 'Sök') +
-                ibtn(M.prev, ICONS.prev) + ibtn(M.pause, ICONS.pause) + ibtn(M.next, ICONS.next) +
-                (musicLink().v || musicLink().list ? btn(M.play, ICONS.play, CONFIG.music.playLabel || 'Min lista') : '') +
+                '<div class="mctrl">' + btn(M.search, ICONS.search, 'Sök') +
+                ibtn(M.prev, ICONS.prev) + ibtn(M.pause, ICONS.play) + ibtn(M.next, ICONS.next) + btn(M.ad, ICONS.next, 'Reklam') +
+                (musicLink().v || musicLink().list ? btn(M.play, ICONS.music, CONFIG.music.playLabel || 'Min lista') : '') +
                 '</div></div></div>';
         }
         (CONFIG.lunch || []).forEach(function (l, i) {
@@ -455,9 +456,11 @@
         row.parentNode.insertBefore(box, row.nextSibling);
     }
 
-    // Music card: everything plays in TizenTube (YouTube's TV app with ad blocking, via TizenBrew). The card
-    // only searches, starts playback there, and remembers the last song (localStorage) to show its cover.
-    var M = { search: '#msearch', play: '#mplay', last: '#mlast', pause: '#mpause', next: '#mnext', prev: '#mprev' };
+    // Music card: YouTube's embedded player, shown in the card. It lives in player/index.html on an https
+    // host (YouTube refuses to embed in the file:// app); we drive it with postMessage and it reports
+    // state/title back. The last song is remembered (localStorage) and cued on start.
+    var M = { search: '#msearch', play: '#mplay', last: '#mlast', pause: '#mpause', next: '#mnext', prev: '#mprev', ad: '#mad' };
+    var mState = -1, adTimer = null;
     function musicLink() {
         var link = String(CONFIG.music.link || '');
         var v = /[?&]v=([\w-]+)/.exec(link), list = /[?&]list=([\w-]+)/.exec(link);
@@ -469,168 +472,56 @@
             return JSON.parse(localStorage.getItem('homedash.lastPlayed') || 'null');
         } catch (e) { return set || null; }
     }
+    // Only talk to our own player frame, and only at the origin configured in playerUrl.
+    function playerOrigin() { var m = /^https:\/\/[^/]+/.exec(String(CONFIG.music.playerUrl || '')); return m ? m[0] : null; }
+    function playerCmd(msg) {
+        var f = $('mframe'), o = playerOrigin();
+        if (f && f.contentWindow && o) f.contentWindow.postMessage(msg, o);
+    }
     function renderMusic() {
-        if (!$('mart')) return;
+        if (!$('mtitle')) return;
         var l = lastPlayed();
-        $('mart').innerHTML = l && l.id ? '<img src="https://i.ytimg.com/vi/' + esc(l.id) + '/mqdefault.jpg" alt="">' : ICONS.music;
-        $('mart').setAttribute('data-app', l && l.id ? M.last : M.search);
-        $('mart').className = 'mart focusable';
-        $('mart').tabIndex = 0;
         $('mtitle').textContent = l ? l.title : 'Sök en låt eller artist';
-        $('mauthor').textContent = l ? 'Senast · ' + (l.author || '') : 'Tryck på Sök, välj en låt med OK';
+        $('mauthor').textContent = l ? (l.author || '') : 'Tryck på Sök, välj en låt med OK';
     }
-
-    // ---------- cast to TizenTube (YouTube "Link with TV code" / lounge protocol) ----------
-    // Launch args are ignored once TizenTube is running, so we control it like the phone app does: pair once
-    // with the code from TizenTube > Settings > Link with TV code (screen id kept in this TV's localStorage only),
-    // then bring TizenTube to the front, wait until its screen is online and send setPlaylist. Unofficial API.
-    var LOUNGE = 'https://www.youtube.com/api/lounge';
-    function ytScreen(set) {
-        try {
-            if (set) localStorage.setItem('homedash.ytScreen', set);
-            return localStorage.getItem('homedash.ytScreen') || CONFIG.music.screenId || null;
-        } catch (e) { return set || CONFIG.music.screenId || null; }
+    function setToggleIcon() {
+        var t = document.querySelector('[data-app="' + M.pause + '"]');
+        if (t) t.innerHTML = mState === 1 ? ICONS.pause : ICONS.play;
     }
-    function postForm(url, data, cb) {
-        var xhr = new XMLHttpRequest(), body = Object.keys(data).map(function (k) {
-            return encodeURIComponent(k) + '=' + encodeURIComponent(data[k]);
-        }).join('&');
-        xhr.open('POST', url, true);
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        xhr.timeout = 15000;
-        xhr.onload = function () { cb(xhr.status >= 200 && xhr.status < 300 ? null : new Error('HTTP ' + xhr.status), xhr.responseText); };
-        xhr.onerror = xhr.ontimeout = function () { cb(new Error('nätverksfel')); };
-        xhr.send(body);
-    }
-    function qs(o) { return Object.keys(o).map(function (k) { return k + '=' + encodeURIComponent(o[k]); }).join('&'); }
-    function loungeToken(cb) {
-        postForm(LOUNGE + '/pairing/get_lounge_token_batch', { screen_ids: ytScreen() }, function (err, t) {
-            var tok = null;
-            try { tok = JSON.parse(t).screens[0].loungeToken; } catch (e) { }
-            cb(tok ? null : (err || new Error('ingen lounge-token')), tok);
-        });
-    }
-    function screenOnline(tok, cb) {
-        postForm(LOUNGE + '/pairing/get_screen_availability', { lounge_token: tok }, function (err, t) {
-            var ok = false;
-            try { ok = JSON.parse(t).screens[0].status === 'online'; } catch (e) { }
-            cb(ok);
-        });
-    }
-    // Send lounge commands in one session: cmds = [{ sc: 'setPlaylist', ...params, delay?: ms before sending }].
-    function loungeSend(tok, cmds, cb) {
-        var id = 'homedash-' + Math.random().toString(36).slice(2), base = LOUNGE + '/bc/bind?';
-        var common = { device: 'REMOTE_CONTROL', app: 'youtube-desktop', name: 'HomeDash', id: id, loungeIdToken: tok, VER: 8, CVER: 1, v: 2, TYPE: 'xmlhttp' };
-        function p(extra) { var o = {}, k; for (k in common) o[k] = common[k]; for (k in extra) o[k] = extra[k]; return qs(o); }
-        postForm(base + p({ RID: 1, zx: 'a' }), { count: 0 }, function (err, t) {
-            var sid = /"c","([^"]+)"/.exec(t || ''), gs = /"S","([^"]+)"/.exec(t || '');
-            if (err || !sid || !gs) return cb(err || new Error('kunde inte ansluta till TizenTube'));
-            (function next(i) {
-                if (i >= cmds.length) return cb(null);
-                var c = cmds[i], body = { count: 1, ofs: i }, k;
-                for (k in c) if (k !== 'sc' && k !== 'delay') body['req0_' + k] = c[k];
-                body.req0__sc = c.sc;
-                setTimeout(function () {
-                    postForm(base + p({ RID: i + 2, SID: sid[1], gsessionid: gs[1], AID: 5, zx: 'c' + i }), body, function (e) {
-                        if (e) return cb(e);
-                        next(i + 1);
-                    });
-                }, c.delay || 0);
-            })(0);
-        });
-    }
-    // Bring an app to the front through the TV's own remote-control API (plain launch, no app-control data).
-    function tvLaunch(appId, cb) {
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', 'http://127.0.0.1:8001/api/v2/applications/' + encodeURIComponent(appId), true);
-        xhr.timeout = 5000;
-        xhr.onload = function () { cb(xhr.status >= 200 && xhr.status < 300); };
-        xhr.onerror = xhr.ontimeout = function () { cb(false); };
-        xhr.send();
-    }
-    // YouTube's TV app online = TizenTube is open: bring TizenBrew to the front. Otherwise start TizenBrew
-    // with the TizenTube module (app control) and let the caller wait until the screen comes online.
-    function bringTizenTube(online) {
-        if (!IS_TV || !CONFIG.tizenBrewAppId) return;
-        var id = CONFIG.tizenBrewAppId, mod = CONFIG.music.module || 'npm/@foxreis/tizentube';
-        if (online) tvLaunch(id, function (ok) { if (!ok) try { tizen.application.launch(id); } catch (e) { } });
-        else launchViaTizenBrew(mod, null, '');
-    }
-    // Play a song (+ Mix): bring/start TizenTube, wait until its screen is online (up to ~60 s), then
-    // setPlaylist and play (the TV loads cast songs paused).
-    function playSong(v, list) {
-        if (!v && !list) return;
-        if (!ytScreen()) return togglePair({ v: v, list: list });
-        status('Startar musik i TizenTube…');
-        loungeToken(function (err, tok) {
-            if (err) return status('TizenTube: ' + err.message + ' – koppla om via Sök');
-            screenOnline(tok, function (online) {
-                bringTizenTube(online);
-                var tries = 0;
-                (function wait(ok) {
-                    if (!ok && ++tries < 30) return setTimeout(function () { screenOnline(tok, wait); }, 2000);
-                    if (!ok) return status('TizenTube svarar inte – välj konto i TizenTube om den frågar');
-                    loungeSend(tok, [
-                        { sc: 'setPlaylist', videoId: v || '', listId: list || '', currentTime: 0, currentIndex: 0, delay: online ? 1500 : 6000 },
-                        { sc: 'play', delay: 3000 }
-                    ], function (e) { status(e ? 'TizenTube: ' + e.message : ''); });
-                    musicPaused = false;
-                    var pb = document.querySelector('[data-app="' + M.pause + '"]');
-                    if (pb) pb.innerHTML = ICONS.pause;
-                })(online);
-            });
-        });
-    }
-    // Dashboard controls for TizenTube: 'play', 'pause', 'next', 'previous'.
-    var musicPaused = false;
-    function musicCmd(sc) {
-        if (!ytScreen()) return togglePair();
-        loungeToken(function (err, tok) {
-            if (err) return status('TizenTube: ' + err.message);
-            loungeSend(tok, [{ sc: sc }], function (e) { status(e ? 'TizenTube: ' + e.message : ''); });
-        });
-    }
-
-    // Pairing panel: type the 12-digit code shown in TizenTube > Settings > Link with TV code.
-    var pendingPlay = null;
-    function pairOpen() { var p = $('pairPanel'); return !!p && p.className.indexOf('hidden') < 0; }
-    function setupPair() {
-        var p = document.createElement('div');
-        p.id = 'pairPanel';
-        p.className = 'search-panel pair-panel hidden';
-        p.innerHTML = '<h2>Koppla till TizenTube <span class="hint">en gång · Tillbaka = stäng</span></h2>' +
-            '<p class="pair-help">Öppna YouTube-tile (TizenTube) → Inställningar → <b>Länka med TV-kod</b> och skriv koden här.</p>' +
-            '<input id="pairInput" class="search-input focusable" type="text" inputmode="numeric" placeholder="123 456 789 012" autocomplete="off">' +
-            '<div id="pairMsg" class="muted"></div>';
-        document.body.appendChild(p);
-        var input = $('pairInput');
-        function submit() {
-            var code = input.value.replace(/\D/g, '');
-            if (code.length < 8) return;
-            $('pairMsg').textContent = 'Kopplar…';
-            postForm(LOUNGE + '/pairing/get_screen', { pairing_code: code }, function (err, t) {
-                var s = null;
-                try { s = JSON.parse(t).screen; } catch (e) { }
-                if (!s || !s.screenId) { $('pairMsg').textContent = 'Fel kod eller utgången – visa en ny kod i TizenTube'; return; }
-                ytScreen(s.screenId);
-                input.value = '';
-                togglePair();
-                status('Kopplad till ' + (s.name || 'TizenTube'));
-                if (pendingPlay) { var q = pendingPlay; pendingPlay = null; playSong(q.v, q.list); }
-            });
+    window.addEventListener('message', function (e) {
+        var d = e.data, f = $('mframe');
+        if (!f || e.source !== f.contentWindow || e.origin !== playerOrigin()) return;
+        if (!d || d.homedash !== 'player') return;
+        if (d.state === -2) { // player page ready: cue the last song (or the configured link)
+            var l = lastPlayed(), ml = musicLink();
+            return playerCmd(l && l.id ? { cmd: 'load', v: l.id, list: 'RD' + l.id } : { cmd: 'load', v: ml.v, list: ml.list });
         }
-        input.addEventListener('keydown', function (e) {
-            if ((e.keyCode === 13 || e.keyCode === 65376) && input.value.trim()) { e.preventDefault(); e.stopPropagation(); submit(); }
-            else if (e.keyCode === 13) e.stopPropagation();
-        });
-        input.addEventListener('change', submit);
+        mState = d.state;
+        if (d.title) { $('mtitle').textContent = d.title; $('mauthor').textContent = d.author || ''; }
+        setToggleIcon();
+    });
+    // Play a song (+ its YouTube Mix so music continues) in the card.
+    function playSong(v, list, meta) {
+        if (!v && !list) return;
+        if (meta) { lastPlayed(meta); renderMusic(); }
+        playerCmd({ cmd: 'load', v: v || '', list: list || '', autoplay: true });
     }
-    function togglePair(play) {
-        var p = $('pairPanel'), open = !pairOpen();
-        if (play) pendingPlay = play;
-        if (open && searchOpen()) toggleSearch();
-        p.className = open ? 'search-panel pair-panel' : 'search-panel pair-panel hidden';
-        if (open) $('pairInput').focus(); else focusFirst();
+    // Ads: YouTube's "Skip ad" button is inside its own frame, so code can't press it. "Reklam" hands the
+    // remote to the player for a few seconds (arrows/OK act inside YouTube), then takes focus back.
+    function adMode() {
+        var f = $('mframe'), back = document.querySelector('[data-app="' + M.ad + '"]');
+        if (!f) return;
+        clearTimeout(adTimer);
+        $('mframe').parentNode.className = 'mart admode';
+        f.focus();
+        playerCmd({ cmd: 'focus' });
+        status('Reklam: använd pilarna och OK i spelaren (10 s)');
+        adTimer = setTimeout(function () {
+            $('mframe').parentNode.className = 'mart';
+            window.focus();
+            if (back) back.focus();
+            status('');
+        }, 10000);
     }
 
     // ---------- music search ----------
@@ -707,10 +598,8 @@
     function playSearchResult(id) {
         if (!/^[\w-]{6,20}$/.test(id)) return;
         var r = searchById[id] || { id: id, title: '', author: '' };
-        lastPlayed({ id: id, title: r.title, author: r.author });
-        renderMusic();
         if (searchOpen()) toggleSearch();
-        playSong(id, 'RD' + id);
+        playSong(id, 'RD' + id, { id: id, title: r.title, author: r.author });
     }
 
     var WEEKDAYS = ['söndag', 'måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag', 'lördag'];
@@ -974,7 +863,7 @@
 
     // ---------- remote / focus ----------
     function focusables() {
-        var scope = pairOpen() ? $('pairPanel') : searchOpen() ? $('searchPanel') : drawerOpen() ? $('allAppsSection') : document;
+        var scope = searchOpen() ? $('searchPanel') : drawerOpen() ? $('allAppsSection') : document;
         return Array.prototype.slice.call(scope.querySelectorAll('.focusable')).filter(function (el) {
             return el.offsetParent !== null;
         });
@@ -1072,7 +961,6 @@
             case KEY.GREEN: refreshAll(); break;
             case KEY.YELLOW: hook('key', 'YELLOW'); break;
             case KEY.BACK: case KEY.ESC:
-                if (pairOpen()) { togglePair(); break; }
                 if (searchOpen()) { toggleSearch(); break; }
                 if (handled(hook('back'))) break;
                 if ($('allAppsSection').className.indexOf('hidden') < 0) { toggleAllApps(); break; }
@@ -1106,15 +994,11 @@
         if (id === LAUNCHER) return toggleAllApps();
         if (id === RELOAD) return reloadDash();
         if (handled(hook('open', id))) return;
-        if (id === M.pause) { // toggle: pause / resume (we don't track TizenTube's state, so alternate)
-            musicPaused = !musicPaused;
-            el.innerHTML = musicPaused ? ICONS.play : ICONS.pause;
-            return musicCmd(musicPaused ? 'pause' : 'play');
-        }
-        if (id === M.next) return musicCmd('next');
-        if (id === M.prev) return musicCmd('previous');
+        if (id === M.pause) return playerCmd({ cmd: 'toggle' });
+        if (id === M.next) return playerCmd({ cmd: 'next' });
+        if (id === M.prev) return playerCmd({ cmd: 'prev' });
+        if (id === M.ad) return adMode();
         if (id === M.play) { var ml = musicLink(); return playSong(ml.v, ml.list); }
-        if (id === M.last) { var lp = lastPlayed(); return lp && lp.id ? playSong(lp.id, 'RD' + lp.id) : toggleSearch(); }
         if (id === M.search) return toggleSearch();
         if (id && id.indexOf(SEARCH_PREFIX) === 0) return playSearchResult(id.slice(SEARCH_PREFIX.length));
         if (drawerOpen()) toggleAllApps(); // come back to the dashboard, not the drawer
@@ -1137,7 +1021,7 @@
     }
     setupDrawer();
     setupExtras();
-    if (CONFIG.music) { setupSearch(); setupPair(); renderMusic(); }
+    if (CONFIG.music && CONFIG.music.playerUrl) { setupSearch(); renderMusic(); }
     tickClock(); setInterval(tickClock, 5000);
     refreshAll();
     loadApps();
