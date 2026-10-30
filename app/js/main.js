@@ -434,16 +434,16 @@
     function setupExtras() {
         var row = $('forecastCard').parentNode, box = document.createElement('section'), html = '';
         box.className = 'extras';
-        if (CONFIG.music && CONFIG.music.playerUrl) {
-            var btn = function (id, icon, extra) {
-                return '<div class="mbtn focusable' + (extra || '') + '" tabindex="0" data-app="' + id + '">' + icon + '</div>';
+        if (CONFIG.music) {
+            var btn = function (id, icon, label) {
+                return '<div class="mpill focusable" tabindex="0" data-app="' + id + '">' + icon + esc(label) + '</div>';
             };
-            html += '<div class="card mini music"><div class="mplayer"><iframe id="mframe" src="' + esc(CONFIG.music.playerUrl) +
-                '" allow="autoplay; encrypted-media" frameborder="0"></iframe></div>' +
-                '<div class="minfo"><h2>' + esc(CONFIG.music.name || 'Musik') + '</h2>' +
-                '<div id="mtitle" class="mtitle">Laddar spelaren…</div><div id="mauthor" class="mauthor"></div>' +
-                '<div class="mctrl">' + btn(M.prev, ICONS.prev) + btn(M.toggle, ICONS.play, ' big') + btn(M.next, ICONS.next) +
-                btn(M.search, ICONS.search) + btn(M.full, ICONS.full) + '</div></div></div>';
+            html += '<div class="card mini music"><div id="mart" class="mart"></div>' +
+                '<div class="minfo"><h2>' + esc(CONFIG.music.name || 'Musik') + ' <span class="hint">spelas i TizenTube · utan reklam</span></h2>' +
+                '<div id="mtitle" class="mtitle"></div><div id="mauthor" class="mauthor"></div>' +
+                '<div class="mctrl">' + btn(M.search, ICONS.search, 'Sök') +
+                (musicLink().v || musicLink().list ? btn(M.play, ICONS.play, CONFIG.music.playLabel || 'Min lista') : '') +
+                '</div></div></div>';
         }
         (CONFIG.lunch || []).forEach(function (l, i) {
             html += '<div class="card mini lunch"><h2>Lunch · ' + esc(l.name) + '</h2><div id="lunch' + i + '" class="lunch-body muted">…</div></div>';
@@ -453,30 +453,39 @@
         row.parentNode.insertBefore(box, row.nextSibling);
     }
 
-    // Music card: the YouTube player lives in player/index.html on an https host (YouTube won't embed
-    // in a file:// page); we drive it with postMessage and it reports state/title back.
-    var M = { prev: '#mprev', toggle: '#mtoggle', next: '#mnext', full: '#mfull', search: '#msearch' }, mState = -1;
+    // Music card: everything plays in TizenTube (YouTube's TV app with ad blocking, via TizenBrew). The card
+    // only searches, starts playback there, and remembers the last song (localStorage) to show its cover.
+    var M = { search: '#msearch', play: '#mplay', last: '#mlast' };
     function musicLink() {
         var link = String(CONFIG.music.link || '');
         var v = /[?&]v=([\w-]+)/.exec(link), list = /[?&]list=([\w-]+)/.exec(link);
         return { v: v && v[1], list: list && list[1] };
     }
-    // Only talk to our own player frame, and only at the origin configured in playerUrl.
-    function playerOrigin() { var m = /^https:\/\/[^/]+/.exec(String(CONFIG.music.playerUrl || '')); return m ? m[0] : null; }
-    function playerCmd(msg) {
-        var f = $('mframe'), o = playerOrigin();
-        if (f && f.contentWindow && o) f.contentWindow.postMessage(msg, o);
+    function lastPlayed(set) {
+        try {
+            if (set) localStorage.setItem('homedash.lastPlayed', JSON.stringify(set));
+            return JSON.parse(localStorage.getItem('homedash.lastPlayed') || 'null');
+        } catch (e) { return set || null; }
     }
-    window.addEventListener('message', function (e) {
-        var d = e.data, f = $('mframe');
-        if (!f || e.source !== f.contentWindow || e.origin !== playerOrigin()) return;
-        if (!d || d.homedash !== 'player') return;
-        if (d.state === -2) { var l = musicLink(); return playerCmd({ cmd: 'load', v: l.v, list: l.list, autoplay: !!CONFIG.music.autoplay }); }
-        mState = d.state;
-        if (d.title) { $('mtitle').textContent = d.title; $('mauthor').textContent = d.author || ''; }
-        var t = document.querySelector('[data-app="' + M.toggle + '"]');
-        if (t) t.innerHTML = mState === 1 ? ICONS.pause : ICONS.play;
-    });
+    function renderMusic() {
+        if (!$('mart')) return;
+        var l = lastPlayed();
+        $('mart').innerHTML = l && l.id ? '<img src="https://i.ytimg.com/vi/' + esc(l.id) + '/mqdefault.jpg" alt="">' : ICONS.music;
+        $('mart').setAttribute('data-app', l && l.id ? M.last : M.search);
+        $('mart').className = 'mart focusable';
+        $('mart').tabIndex = 0;
+        $('mtitle').textContent = l ? l.title : 'Sök en låt eller artist';
+        $('mauthor').textContent = l ? 'Senast · ' + (l.author || '') : 'Tryck på Sök, välj en låt med OK';
+    }
+    // Open in TizenTube: a song plus its YouTube Mix (list=RD<id>) so similar music keeps playing.
+    function openInTizenTube(q) {
+        var args = [];
+        if (q.v) args.push('v=' + q.v);
+        if (q.list) args.push('list=' + q.list);
+        if (!args.length) return;
+        if (IS_TV && CONFIG.tizenBrewAppId) launchViaTizenBrew(CONFIG.music.module || 'npm/@foxreis/tizentube', null, args.join('&'));
+        else status('Musik kräver TizenBrew på TV:n');
+    }
 
     // ---------- music search ----------
     // Reads YouTube's normal search page and its embedded ytInitialData (no API key). Only works in the
@@ -516,7 +525,7 @@
         });
         input.addEventListener('change', function () { runSearch(input.value); });
     }
-    var lastQuery = '';
+    var lastQuery = '', searchById = {};
     function runSearch(q) {
         q = String(q || '').trim();
         if (!q || q === lastQuery) return;
@@ -530,6 +539,7 @@
             var list = [];
             try { list = xhr.status === 200 ? ytResults(xhr.responseText, 12) : []; } catch (e) { }
             if (!list.length) { box.innerHTML = '<div class="muted">Inga träffar (eller så har YouTube ändrat sidan)</div>'; return; }
+            list.forEach(function (r) { searchById[r.id] = r; });
             box.innerHTML = list.map(function (r) {
                 return '<div class="sres focusable" tabindex="0" data-app="' + SEARCH_PREFIX + esc(r.id) + '">' +
                     '<img src="https://i.ytimg.com/vi/' + esc(r.id) + '/mqdefault.jpg" alt="">' +
@@ -550,8 +560,11 @@
     }
     function playSearchResult(id) {
         if (!/^[\w-]{6,20}$/.test(id)) return;
-        playerCmd({ cmd: 'load', v: id, autoplay: true });
+        var r = searchById[id] || { id: id, title: '', author: '' };
+        lastPlayed({ id: id, title: r.title, author: r.author });
+        renderMusic();
         if (searchOpen()) toggleSearch();
+        openInTizenTube({ v: id, list: 'RD' + id });
     }
 
     var WEEKDAYS = ['söndag', 'måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag', 'lördag'];
@@ -859,7 +872,8 @@
         prev: '<svg viewBox="0 0 24 24"><path d="M18 5v14l-9.5-7zM6 5v14"/></svg>',
         next: '<svg viewBox="0 0 24 24"><path d="M6 5v14l9.5-7zM18 5v14"/></svg>',
         full: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
-        search: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg>'
+        search: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg>',
+        music: '<svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>'
     };
     // Commit the page's scripts were loaded from (index.html loader pins them to the latest one).
     function codeVersion() {
@@ -940,25 +954,13 @@
                 function (e) { fail(e.message); });
         } catch (e) { fail(e.message); }
     }
-    // Full screen: open TizenTube (YouTube's TV app) on CONFIG.music.link; TizenBrew appends the args to its URL.
-    function musicFullscreen() {
-        var l = musicLink(), q = [];
-        if (l.v) q.push('v=' + l.v);
-        if (l.list) q.push('list=' + l.list);
-        if (!q.length) return status('Ange en YouTube-länk i config.js (music.link)');
-        if (mState === 1) playerCmd({ cmd: 'toggle' }); // don't play twice
-        if (IS_TV && CONFIG.tizenBrewAppId) launchViaTizenBrew(CONFIG.music.module || 'npm/@foxreis/tizentube', null, q.join('&'));
-        else status('Fullskärm kräver TizenBrew på TV:n');
-    }
     function open(el) {
         var mod = el.getAttribute('data-module'), id = el.getAttribute('data-app');
         if (id === LAUNCHER) return toggleAllApps();
         if (id === RELOAD) return reloadDash();
         if (handled(hook('open', id))) return;
-        if (id === M.toggle) return playerCmd({ cmd: 'toggle' });
-        if (id === M.next) return playerCmd({ cmd: 'next' });
-        if (id === M.prev) return playerCmd({ cmd: 'prev' });
-        if (id === M.full) return musicFullscreen();
+        if (id === M.play) return openInTizenTube(musicLink());
+        if (id === M.last) { var lp = lastPlayed(); return lp && openInTizenTube({ v: lp.id, list: 'RD' + lp.id }); }
         if (id === M.search) return toggleSearch();
         if (id && id.indexOf(SEARCH_PREFIX) === 0) return playSearchResult(id.slice(SEARCH_PREFIX.length));
         if (drawerOpen()) toggleAllApps(); // come back to the dashboard, not the drawer
@@ -981,7 +983,7 @@
     }
     setupDrawer();
     setupExtras();
-    if (CONFIG.music && CONFIG.music.playerUrl) setupSearch();
+    if (CONFIG.music) { setupSearch(); renderMusic(); }
     tickClock(); setInterval(tickClock, 5000);
     refreshAll();
     loadApps();

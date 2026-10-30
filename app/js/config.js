@@ -29,14 +29,9 @@ var CONFIG = {
 
     // School lunch cards (skolmaten.se). school = the name in the school's URL: skolmaten.se/<school>
     lunch: [], // e.g. [{ name: 'Skolan', school: 'skolans-url-namn' }]
-    // Music card: YouTube / YouTube Music link (video and/or playlist). playerUrl = https copy of player/index.html
-    // (YouTube won't embed in the file:// app). Full-screen button opens the same link in TizenTube.
-    music: {
-        name: 'Musik',
-        link: '', // set your own in local.js: CONFIG.music.link = 'https://music.youtube.com/playlist?list=...'
-        playerUrl: 'https://milejz.github.io/tizenbrew-homedash/player/',
-        autoplay: false
-    },
+    // Music card: search + start music in TizenTube (YouTube TV app with ad blocking, via TizenBrew).
+    // link = your own YouTube / YouTube Music video or playlist link (set it in local.js); playLabel = its button text.
+    music: { name: 'Musik', link: '', playLabel: 'Min lista' },
     air: true, // air quality + pollen card (Open-Meteo, uses location above)
 
     newsFeed: 'https://www.svt.se/rss.xml',
