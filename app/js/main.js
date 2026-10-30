@@ -441,7 +441,7 @@
             html += '<div class="card mini music"><div id="mart" class="mart"></div>' +
                 '<div class="minfo"><h2>' + esc(CONFIG.music.name || 'Musik') + ' <span class="hint">spelas i TizenTube · utan reklam</span></h2>' +
                 '<div id="mtitle" class="mtitle"></div><div id="mauthor" class="mauthor"></div>' +
-                '<div class="mctrl">' + btn(M.search, ICONS.search, 'Sök') +
+                '<div class="mctrl">' + btn(M.last, ICONS.play, 'Spela') + btn(M.search, ICONS.search, 'Sök') +
                 (musicLink().v || musicLink().list ? btn(M.play, ICONS.play, CONFIG.music.playLabel || 'Min lista') : '') +
                 '</div></div></div>';
         }
@@ -1080,7 +1080,7 @@
         if (id === RELOAD) return reloadDash();
         if (handled(hook('open', id))) return;
         if (id === M.play) { var ml = musicLink(); return playSong(ml.v, ml.list); }
-        if (id === M.last) { var lp = lastPlayed(); return lp && playSong(lp.id, 'RD' + lp.id); }
+        if (id === M.last) { var lp = lastPlayed(); return lp && lp.id ? playSong(lp.id, 'RD' + lp.id) : toggleSearch(); }
         if (id === M.search) return toggleSearch();
         if (id && id.indexOf(SEARCH_PREFIX) === 0) return playSearchResult(id.slice(SEARCH_PREFIX.length));
         if (drawerOpen()) toggleAllApps(); // come back to the dashboard, not the drawer
