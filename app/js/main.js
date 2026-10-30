@@ -483,7 +483,10 @@
         if (q.v) args.push('v=' + q.v);
         if (q.list) args.push('list=' + q.list);
         if (!args.length) return;
-        if (IS_TV && CONFIG.tizenBrewAppId) launchViaTizenBrew(CONFIG.music.module || 'npm/@foxreis/tizentube', null, args.join('&'));
+        // TizenBrew appends this to TizenTube's start URL (youtube.com/tv?additionalDataUrl=...). The TV app
+        // navigates by hash, so also add #/watch?... to open the player directly.
+        var a = args.join('&');
+        if (IS_TV && CONFIG.tizenBrewAppId) launchViaTizenBrew(CONFIG.music.module || 'npm/@foxreis/tizentube', null, a + '#/watch?' + a);
         else status('Musik kräver TizenBrew på TV:n');
     }
 
