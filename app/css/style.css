@@ -234,8 +234,8 @@ footer { display: flex; justify-content: space-between; font-size: 14px; color: 
 .search-input:focus { border-color: #fff; background: rgba(255, 255, 255, .12); }
 .search-input::placeholder { color: var(--text-3); }
 .search-results { display: flex; flex-wrap: wrap; }
-.sres { width: 380px; margin: 0 20px 22px 0; border-radius: 20px; padding: 10px; outline: none; transition: transform .15s ease-out; }
-.sres img { width: 360px; height: 202px; border-radius: 14px; display: block; background: #000; object-fit: cover; }
+.sres { width: 372px; margin: 0 18px 22px 0; border-radius: 20px; padding: 10px; outline: none; transition: transform .15s ease-out; }
+.sres img { width: 352px; height: 198px; border-radius: 14px; display: block; background: #000; object-fit: cover; }
 .sres-title { font-size: 19px; font-weight: 600; margin-top: 10px; line-height: 1.3; max-height: 50px; overflow: hidden; }
 .sres-meta { font-size: 15px; color: var(--text-3); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sres:focus { background: #fff; color: #0b0e15; transform: scale(1.04); box-shadow: 0 16px 34px rgba(0, 0, 0, .5); }
