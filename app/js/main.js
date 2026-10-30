@@ -435,6 +435,7 @@
         var row = $('forecastCard').parentNode, box = document.createElement('section'), html = '';
         box.className = 'extras';
         if (CONFIG.music) {
+            var ibtn = function (id, icon) { return '<div class="mpill icon focusable" tabindex="0" data-app="' + id + '">' + icon + '</div>'; };
             var btn = function (id, icon, label) {
                 return '<div class="mpill focusable" tabindex="0" data-app="' + id + '">' + icon + esc(label) + '</div>';
             };
@@ -442,6 +443,7 @@
                 '<div class="minfo"><h2>' + esc(CONFIG.music.name || 'Musik') + ' <span class="hint">spelas i TizenTube · utan reklam</span></h2>' +
                 '<div id="mtitle" class="mtitle"></div><div id="mauthor" class="mauthor"></div>' +
                 '<div class="mctrl">' + btn(M.last, ICONS.play, 'Spela') + btn(M.search, ICONS.search, 'Sök') +
+                ibtn(M.prev, ICONS.prev) + ibtn(M.pause, ICONS.pause) + ibtn(M.next, ICONS.next) +
                 (musicLink().v || musicLink().list ? btn(M.play, ICONS.play, CONFIG.music.playLabel || 'Min lista') : '') +
                 '</div></div></div>';
         }
@@ -455,7 +457,7 @@
 
     // Music card: everything plays in TizenTube (YouTube's TV app with ad blocking, via TizenBrew). The card
     // only searches, starts playback there, and remembers the last song (localStorage) to show its cover.
-    var M = { search: '#msearch', play: '#mplay', last: '#mlast' };
+    var M = { search: '#msearch', play: '#mplay', last: '#mlast', pause: '#mpause', next: '#mnext', prev: '#mprev' };
     function musicLink() {
         var link = String(CONFIG.music.link || '');
         var v = /[?&]v=([\w-]+)/.exec(link), list = /[?&]list=([\w-]+)/.exec(link);
@@ -515,52 +517,77 @@
             cb(ok);
         });
     }
-    function loungePlay(tok, v, list, cb) {
+    // Send lounge commands in one session: cmds = [{ sc: 'setPlaylist', ...params, delay?: ms before sending }].
+    function loungeSend(tok, cmds, cb) {
         var id = 'homedash-' + Math.random().toString(36).slice(2), base = LOUNGE + '/bc/bind?';
         var common = { device: 'REMOTE_CONTROL', app: 'youtube-desktop', name: 'HomeDash', id: id, loungeIdToken: tok, VER: 8, CVER: 1, v: 2, TYPE: 'xmlhttp' };
         function p(extra) { var o = {}, k; for (k in common) o[k] = common[k]; for (k in extra) o[k] = extra[k]; return qs(o); }
         postForm(base + p({ RID: 1, zx: 'a' }), { count: 0 }, function (err, t) {
             var sid = /"c","([^"]+)"/.exec(t || ''), gs = /"S","([^"]+)"/.exec(t || '');
             if (err || !sid || !gs) return cb(err || new Error('kunde inte ansluta till TizenTube'));
-            postForm(base + p({ RID: 2, SID: sid[1], gsessionid: gs[1], AID: 5, zx: 'b' }), {
-                count: 1, ofs: 0, req0__sc: 'setPlaylist', req0_videoId: v || '', req0_listId: list || '', req0_currentTime: 0, req0_currentIndex: 0
-            }, function (e2) {
-                if (e2) return cb(e2);
-                // the TV loads the song paused (black screen); start it once it has loaded
+            (function next(i) {
+                if (i >= cmds.length) return cb(null);
+                var c = cmds[i], body = { count: 1, ofs: i }, k;
+                for (k in c) if (k !== 'sc' && k !== 'delay') body['req0_' + k] = c[k];
+                body.req0__sc = c.sc;
                 setTimeout(function () {
-                    postForm(base + p({ RID: 3, SID: sid[1], gsessionid: gs[1], AID: 5, zx: 'c' }), { count: 1, ofs: 1, req0__sc: 'play' }, cb);
-                }, 3000);
-            });
+                    postForm(base + p({ RID: i + 2, SID: sid[1], gsessionid: gs[1], AID: 5, zx: 'c' + i }), body, function (e) {
+                        if (e) return cb(e);
+                        next(i + 1);
+                    });
+                }, c.delay || 0);
+            })(0);
         });
     }
-    // Running TizenBrew: plain launch = bring to front (an app-control module request would make it reload
-    // to a blank page). Not running: start it with the TizenTube module.
-    function bringTizenTube() {
+    // Bring an app to the front through the TV's own remote-control API (plain launch, no app-control data).
+    function tvLaunch(appId, cb) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', 'http://127.0.0.1:8001/api/v2/applications/' + encodeURIComponent(appId), true);
+        xhr.timeout = 5000;
+        xhr.onload = function () { cb(xhr.status >= 200 && xhr.status < 300); };
+        xhr.onerror = xhr.ontimeout = function () { cb(false); };
+        xhr.send();
+    }
+    // YouTube's TV app online = TizenTube is open: bring TizenBrew to the front. Otherwise start TizenBrew
+    // with the TizenTube module (app control) and let the caller wait until the screen comes online.
+    function bringTizenTube(online) {
         if (!IS_TV || !CONFIG.tizenBrewAppId) return;
         var id = CONFIG.tizenBrewAppId, mod = CONFIG.music.module || 'npm/@foxreis/tizentube';
-        try {
-            tizen.application.getAppsContext(function (ctx) {
-                var running = ctx.some(function (c) { return c.appId === id; });
-                if (running) tizen.application.launch(id, null, function () { launchViaTizenBrew(mod, null, ''); });
-                else launchViaTizenBrew(mod, null, '');
-            }, function () { launchViaTizenBrew(mod, null, ''); });
-        } catch (e) { launchViaTizenBrew(mod, null, ''); }
+        if (online) tvLaunch(id, function (ok) { if (!ok) try { tizen.application.launch(id); } catch (e) { } });
+        else launchViaTizenBrew(mod, null, '');
     }
-    // Bring TizenTube up (starts it if needed), then cast once its screen reports online (up to ~40 s).
+    // Play a song (+ Mix): bring/start TizenTube, wait until its screen is online (up to ~60 s), then
+    // setPlaylist and play (the TV loads cast songs paused).
     function playSong(v, list) {
         if (!v && !list) return;
         if (!ytScreen()) return togglePair({ v: v, list: list });
-        bringTizenTube();
         status('Startar musik i TizenTube…');
         loungeToken(function (err, tok) {
             if (err) return status('TizenTube: ' + err.message + ' – koppla om via Sök');
-            var tries = 0;
-            (function wait() {
-                screenOnline(tok, function (ok) {
-                    if (!ok && ++tries < 20) return setTimeout(wait, 2000);
-                    loungePlay(tok, v, list, function (e) { status(e ? 'TizenTube: ' + e.message : ''); });
-                });
-            })();
+            screenOnline(tok, function (online) {
+                bringTizenTube(online);
+                var tries = 0;
+                (function wait(ok) {
+                    if (!ok && ++tries < 30) return setTimeout(function () { screenOnline(tok, wait); }, 2000);
+                    if (!ok) return status('TizenTube svarar inte – välj konto i TizenTube om den frågar');
+                    loungeSend(tok, [
+                        { sc: 'setPlaylist', videoId: v || '', listId: list || '', currentTime: 0, currentIndex: 0, delay: online ? 1500 : 6000 },
+                        { sc: 'play', delay: 3000 }
+                    ], function (e) { status(e ? 'TizenTube: ' + e.message : ''); });
+                    musicPaused = false;
+                    var pb = document.querySelector('[data-app="' + M.pause + '"]');
+                    if (pb) pb.innerHTML = ICONS.pause;
+                })(online);
+            });
+        });
+    }
+    // Dashboard controls for TizenTube: 'play', 'pause', 'next', 'previous'.
+    var musicPaused = false;
+    function musicCmd(sc) {
+        if (!ytScreen()) return togglePair();
+        loungeToken(function (err, tok) {
+            if (err) return status('TizenTube: ' + err.message);
+            loungeSend(tok, [{ sc: sc }], function (e) { status(e ? 'TizenTube: ' + e.message : ''); });
         });
     }
 
@@ -1079,6 +1106,13 @@
         if (id === LAUNCHER) return toggleAllApps();
         if (id === RELOAD) return reloadDash();
         if (handled(hook('open', id))) return;
+        if (id === M.pause) { // toggle: pause / resume (we don't track TizenTube's state, so alternate)
+            musicPaused = !musicPaused;
+            el.innerHTML = musicPaused ? ICONS.play : ICONS.pause;
+            return musicCmd(musicPaused ? 'pause' : 'play');
+        }
+        if (id === M.next) return musicCmd('next');
+        if (id === M.prev) return musicCmd('previous');
         if (id === M.play) { var ml = musicLink(); return playSong(ml.v, ml.list); }
         if (id === M.last) { var lp = lastPlayed(); return lp && lp.id ? playSong(lp.id, 'RD' + lp.id) : toggleSearch(); }
         if (id === M.search) return toggleSearch();
