@@ -1,0 +1,31 @@
+# Samsung TV ads / ACR (viewing tracking) / telemetry.
+# Load into Pi-hole, AdGuard Home, NextDNS denylist, or the router.
+# SAFE = blocks ads/tracking, apps + updates keep working.
+# Bigger community list: https://github.com/Perflyst/PiHoleBlocklist (SmartTV.txt)
+
+# --- SAFE: ads ---
+ads.samsung.com
+samsungads.com
+config.samsungads.com
+ad.samsungadhub.com
+samsungadhub.com
+ads.samsungads.com
+adtracking.samsungads.com
+# --- SAFE: ACR (automatic content recognition = screen watching) ---
+samsungacr.com
+acr.samsungcloudsolution.com
+acr0.samsungcloudsolution.com
+log-config.samsungacr.com
+log-ingestion.samsungacr.com
+# --- SAFE: analytics ---
+samsung-com.112.2o7.net
+analytics.samsungknox.com
+smetrics.samsung.com
+nmetrics.samsung.com
+
+# --- RISKY: uncomment only if you accept side effects ---
+# log-ingestion-eu.samsungacr.com
+# lcprd1.samsungcloudsolution.net        # logs; may affect Smart Hub tiles
+# noticeprd.samsungcloudsolution.com     # notices/banners
+# --- DO NOT BLOCK (breaks app store, sign-in, firmware) ---
+# samsungcloudsolution.com, samsungcloudsolution.net, samsungapps.com, samsungosp.com, samsungotn.net

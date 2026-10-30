@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=1920, user-scalable=no">
+    <title>HomeDash</title>
+    <style>html, body { background: #0e1116; color: #e8ecf1; }</style>
+    <!-- Samsung webapis (IP etc). Only resolves on the TV; harmless 404 in a browser. -->
+    <script src="$WEBAPIS/webapis/webapis.js"></script>
+</head>
+<body>
+<div id="root">
+    <header>
+        <div class="clock">
+            <div id="time">--:--</div>
+            <div id="date"></div>
+        </div>
+        <div class="elpris" id="elpris"></div>
+        <div class="weather-now" id="weatherNow"></div>
+    </header>
+
+    <div id="warnings"></div>
+
+    <section class="row">
+        <div class="card" id="forecastCard">
+            <h2>Väder</h2>
+            <div id="forecast" class="forecast"></div>
+            <h2 class="sub">Helgdagar</h2>
+            <ul id="holidays" class="list compact"></ul>
+        </div>
+        <div class="card" id="departuresCard">
+            <h2 id="departuresTitle">Avgångar</h2>
+            <div id="disruptions"></div>
+            <ul id="departures" class="list"></ul>
+        </div>
+        <div class="card" id="newsCard">
+            <h2>Nyheter</h2>
+            <ul id="news" class="list"></ul>
+            <h2 class="sub" id="ratesTitle">Valuta</h2>
+            <table id="rates" class="rates"></table>
+            <div id="bestFx" class="best-fx"></div>
+        </div>
+    </section>
+
+    <section>
+        <h2 class="section-title">Appar <span class="hint">OK = starta · Röd = alla appar · Grön = uppdatera · Gul = bästa växling</span></h2>
+        <div id="favorites" class="apps"></div>
+    </section>
+
+    <section id="allAppsSection" class="hidden">
+        <h2 class="section-title">Alla appar</h2>
+        <div id="allApps" class="apps"></div>
+    </section>
+
+    <div id="fxPanel" class="fx-panel hidden"></div>
+
+    <footer>
+        <span id="net"></span>
+        <span id="status"></span>
+    </footer>
+</div>
+<script>
+// Loader: load css/js from the newest *trusted* commit on main, pinned by sha on jsDelivr (immutable,
+// always fresh). Trusted = signature verified by GitHub and authored by OWNER; anything else (unsigned
+// push, other author, GitHub unreachable) falls back to the code packaged in this app.
+// js/local.js (personal settings, gitignored) always comes from the package, never from the network.
+(function () {
+    var REPO = 'milejz/tizenbrew-homedash', OWNER = 'milejz';
+    var FILES = ['css/style.css', 'js/config.js', 'LOCAL:js/local.js', 'js/holidays.js', 'js/main.js'];
+    var started = false;
+    function load(base) {
+        if (started) return;
+        started = true;
+        FILES.forEach(function (f) {
+            var el, local = f.indexOf('LOCAL:') === 0, src = local ? f.slice(6) : base + f;
+            if (/\.css$/.test(f)) { el = document.createElement('link'); el.rel = 'stylesheet'; el.href = src; document.head.appendChild(el); }
+            else { el = document.createElement('script'); el.src = src; el.async = false; document.body.appendChild(el); }
+        });
+    }
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'https://api.github.com/repos/' + REPO + '/commits?sha=main&per_page=20');
+    xhr.timeout = 4000;
+    xhr.onload = function () {
+        var sha = null;
+        try {
+            var list = xhr.status === 200 ? JSON.parse(xhr.responseText) : [];
+            for (var i = 0; i < list.length && !sha; i++) {
+                var c = list[i], v = c.commit && c.commit.verification;
+                if (v && v.verified === true && c.author && c.author.login === OWNER && /^[0-9a-f]{40}$/.test(c.sha)) sha = c.sha;
+            }
+        } catch (e) { }
+        load(sha ? 'https://cdn.jsdelivr.net/gh/' + REPO + '@' + sha + '/app/' : '');
+    };
+    xhr.onerror = xhr.ontimeout = function () { load(''); };
+    xhr.send();
+    setTimeout(function () { load(''); }, 5000);
+})();
+</script>
+</body>
+</html>

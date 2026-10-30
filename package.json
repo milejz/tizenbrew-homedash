@@ -1,0 +1,13 @@
+{
+  "name": "tizenbrew-homedash",
+  "version": "1.1.0",
+  "description": "TV dashboard + launcher: clock, weather, SL, elpris, warnings, rates, news, app grid",
+  "packageType": "app",
+  "appName": "HomeDash",
+  "appPath": "app/index.html",
+  "serviceFile": "service.js",
+  "keys": ["ColorF0Red", "ColorF1Green", "ColorF2Yellow", "ColorF3Blue"],
+  "files": ["app/", "service.js"],
+  "keywords": ["tizenbrew", "tizen", "samsung", "tv", "dashboard"],
+  "license": "MIT"
+}
