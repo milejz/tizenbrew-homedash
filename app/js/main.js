@@ -527,11 +527,24 @@
             }, cb);
         });
     }
+    // Running TizenBrew: plain launch = bring to front (an app-control module request would make it reload
+    // to a blank page). Not running: start it with the TizenTube module.
+    function bringTizenTube() {
+        if (!IS_TV || !CONFIG.tizenBrewAppId) return;
+        var id = CONFIG.tizenBrewAppId, mod = CONFIG.music.module || 'npm/@foxreis/tizentube';
+        try {
+            tizen.application.getAppsContext(function (ctx) {
+                var running = ctx.some(function (c) { return c.appId === id; });
+                if (running) tizen.application.launch(id, null, function () { launchViaTizenBrew(mod, null, ''); });
+                else launchViaTizenBrew(mod, null, '');
+            }, function () { launchViaTizenBrew(mod, null, ''); });
+        } catch (e) { launchViaTizenBrew(mod, null, ''); }
+    }
     // Bring TizenTube up (starts it if needed), then cast once its screen reports online (up to ~40 s).
     function playSong(v, list) {
         if (!v && !list) return;
         if (!ytScreen()) return togglePair({ v: v, list: list });
-        if (IS_TV && CONFIG.tizenBrewAppId) launchViaTizenBrew(CONFIG.music.module || 'npm/@foxreis/tizentube', null, '');
+        bringTizenTube();
         status('Startar musik i TizenTube…');
         loungeToken(function (err, tok) {
             if (err) return status('TizenTube: ' + err.message + ' – koppla om via Sök');
