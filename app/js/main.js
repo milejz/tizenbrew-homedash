@@ -443,7 +443,7 @@
                 '<div class="minfo"><h2>' + esc(CONFIG.music.name || 'Musik') + '</h2>' +
                 '<div id="mtitle" class="mtitle">Laddar spelaren…</div><div id="mauthor" class="mauthor"></div>' +
                 '<div class="mctrl">' + btn(M.prev, ICONS.prev) + btn(M.toggle, ICONS.play, ' big') + btn(M.next, ICONS.next) +
-                btn(M.full, ICONS.full) + '</div></div></div>';
+                btn(M.search, ICONS.search) + btn(M.full, ICONS.full) + '</div></div></div>';
         }
         (CONFIG.lunch || []).forEach(function (l, i) {
             html += '<div class="card mini lunch"><h2>Lunch · ' + esc(l.name) + '</h2><div id="lunch' + i + '" class="lunch-body muted">…</div></div>';
@@ -455,7 +455,7 @@
 
     // Music card: the YouTube player lives in player/index.html on an https host (YouTube won't embed
     // in a file:// page); we drive it with postMessage and it reports state/title back.
-    var M = { prev: '#mprev', toggle: '#mtoggle', next: '#mnext', full: '#mfull' }, mState = -1;
+    var M = { prev: '#mprev', toggle: '#mtoggle', next: '#mnext', full: '#mfull', search: '#msearch' }, mState = -1;
     function musicLink() {
         var link = String(CONFIG.music.link || '');
         var v = /[?&]v=([\w-]+)/.exec(link), list = /[?&]list=([\w-]+)/.exec(link);
@@ -477,6 +477,82 @@
         var t = document.querySelector('[data-app="' + M.toggle + '"]');
         if (t) t.innerHTML = mState === 1 ? ICONS.pause : ICONS.play;
     });
+
+    // ---------- music search ----------
+    // Reads YouTube's normal search page and its embedded ytInitialData (no API key). Only works in the
+    // native .wgt, which has no browser CORS limits. Unofficial: may break when YouTube changes the page.
+    var SEARCH_PREFIX = '#ytplay:';
+    function searchOpen() { var p = $('searchPanel'); return !!p && p.className.indexOf('hidden') < 0; }
+    function ytResults(html, max) {
+        var i = html.indexOf('var ytInitialData = ');
+        if (i < 0) i = html.indexOf('ytInitialData = ');
+        if (i < 0) return [];
+        var start = html.indexOf('{', i), end = html.indexOf(';</script>', start), out = [];
+        (function walk(o) {
+            if (!o || typeof o !== 'object' || out.length >= max) return;
+            if (o.videoRenderer && o.videoRenderer.videoId) {
+                var v = o.videoRenderer, t = v.title && (v.title.runs ? v.title.runs.map(function (r) { return r.text; }).join('') : v.title.simpleText);
+                out.push({ id: v.videoId, title: t || '', author: v.ownerText && v.ownerText.runs ? v.ownerText.runs[0].text : '',
+                    length: v.lengthText ? v.lengthText.simpleText : '' });
+                return;
+            }
+            for (var k in o) walk(o[k]);
+        })(JSON.parse(html.slice(start, end)));
+        return out;
+    }
+    function setupSearch() {
+        var p = document.createElement('div');
+        p.id = 'searchPanel';
+        p.className = 'search-panel hidden';
+        p.innerHTML = '<h2>Sök musik <span class="hint">OK på fältet = tangentbord · Tillbaka = stäng</span></h2>' +
+            '<input id="searchInput" class="search-input focusable" type="search" placeholder="Låt, artist eller album…" autocomplete="off">' +
+            '<div id="searchResults" class="search-results"></div>';
+        document.body.appendChild(p);
+        var input = $('searchInput');
+        input.addEventListener('keydown', function (e) {
+            // 13 = Enter, 65376 = Samsung IME "Done"
+            if ((e.keyCode === 13 || e.keyCode === 65376) && input.value.trim()) { e.preventDefault(); e.stopPropagation(); runSearch(input.value); }
+            else if (e.keyCode === 13) e.stopPropagation(); // empty field: let OK open the TV keyboard
+        });
+        input.addEventListener('change', function () { runSearch(input.value); });
+    }
+    var lastQuery = '';
+    function runSearch(q) {
+        q = String(q || '').trim();
+        if (!q || q === lastQuery) return;
+        lastQuery = q;
+        var box = $('searchResults');
+        box.innerHTML = '<div class="muted">Söker…</div>';
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q) + '&sp=EgIQAQ%253D%253D&hl=sv&gl=SE', true);
+        xhr.timeout = 15000;
+        xhr.onload = function () {
+            var list = [];
+            try { list = xhr.status === 200 ? ytResults(xhr.responseText, 12) : []; } catch (e) { }
+            if (!list.length) { box.innerHTML = '<div class="muted">Inga träffar (eller så har YouTube ändrat sidan)</div>'; return; }
+            box.innerHTML = list.map(function (r) {
+                return '<div class="sres focusable" tabindex="0" data-app="' + SEARCH_PREFIX + esc(r.id) + '">' +
+                    '<img src="https://i.ytimg.com/vi/' + esc(r.id) + '/mqdefault.jpg" alt="">' +
+                    '<div class="sres-title">' + esc(r.title) + '</div>' +
+                    '<div class="sres-meta">' + esc(r.author) + (r.length ? ' · ' + esc(r.length) : '') + '</div></div>';
+            }).join('');
+            var first = box.querySelector('.sres');
+            if (first) first.focus();
+        };
+        xhr.onerror = xhr.ontimeout = function () { box.innerHTML = '<div class="muted">Kunde inte söka (nätverk)</div>'; lastQuery = ''; };
+        xhr.send();
+    }
+    function toggleSearch() {
+        var p = $('searchPanel'), open = !searchOpen();
+        p.className = open ? 'search-panel' : 'search-panel hidden';
+        if (open) { lastQuery = ''; $('searchInput').focus(); }
+        else { var b = document.querySelector('[data-app="' + M.search + '"]'); if (b) b.focus(); }
+    }
+    function playSearchResult(id) {
+        if (!/^[\w-]{6,20}$/.test(id)) return;
+        playerCmd({ cmd: 'load', v: id, autoplay: true });
+        if (searchOpen()) toggleSearch();
+    }
 
     var WEEKDAYS = ['söndag', 'måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag', 'lördag'];
     function loadLunch() {
@@ -739,7 +815,7 @@
 
     // ---------- remote / focus ----------
     function focusables() {
-        var scope = drawerOpen() ? $('allAppsSection') : document;
+        var scope = searchOpen() ? $('searchPanel') : drawerOpen() ? $('allAppsSection') : document;
         return Array.prototype.slice.call(scope.querySelectorAll('.focusable')).filter(function (el) {
             return el.offsetParent !== null;
         });
@@ -782,7 +858,8 @@
         pause: '<svg viewBox="0 0 24 24"><path d="M7 4.5h3.5v15H7zM13.5 4.5H17v15h-3.5z" fill="currentColor"/></svg>',
         prev: '<svg viewBox="0 0 24 24"><path d="M18 5v14l-9.5-7zM6 5v14"/></svg>',
         next: '<svg viewBox="0 0 24 24"><path d="M6 5v14l9.5-7zM18 5v14"/></svg>',
-        full: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>'
+        full: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+        search: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg>'
     };
     // Commit the page's scripts were loaded from (index.html loader pins them to the latest one).
     function codeVersion() {
@@ -835,6 +912,7 @@
             case KEY.GREEN: refreshAll(); break;
             case KEY.YELLOW: hook('key', 'YELLOW'); break;
             case KEY.BACK: case KEY.ESC:
+                if (searchOpen()) { toggleSearch(); break; }
                 if (handled(hook('back'))) break;
                 if ($('allAppsSection').className.indexOf('hidden') < 0) { toggleAllApps(); break; }
                 // hide (not exit) so "Autorun Last App" brings HomeDash back on next power-on
@@ -881,6 +959,8 @@
         if (id === M.next) return playerCmd({ cmd: 'next' });
         if (id === M.prev) return playerCmd({ cmd: 'prev' });
         if (id === M.full) return musicFullscreen();
+        if (id === M.search) return toggleSearch();
+        if (id && id.indexOf(SEARCH_PREFIX) === 0) return playSearchResult(id.slice(SEARCH_PREFIX.length));
         if (drawerOpen()) toggleAllApps(); // come back to the dashboard, not the drawer
         if (mod && IS_TV && CONFIG.tizenBrewAppId && mod.indexOf('/') > 0) launchViaTizenBrew(mod, el.getAttribute('data-app'));
         else if (mod) launchModule(mod, el.getAttribute('data-app'));
@@ -901,6 +981,7 @@
     }
     setupDrawer();
     setupExtras();
+    if (CONFIG.music && CONFIG.music.playerUrl) setupSearch();
     tickClock(); setInterval(tickClock, 5000);
     refreshAll();
     loadApps();

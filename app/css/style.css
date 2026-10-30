@@ -223,3 +223,20 @@ footer { display: flex; justify-content: space-between; font-size: 14px; color: 
 .fx-table tr.best td { background: rgba(52, 211, 153, .14); }
 .fx-table tr.best .diff { color: var(--green); font-weight: 700; }
 .fx-note { margin-top: 26px; font-size: 17px; line-height: 1.55; color: var(--text-3); }
+
+/* ---------- music search panel (setupSearch() in main.js) ---------- */
+.search-panel { position: fixed; left: 120px; top: 80px; width: 1680px; height: 920px; border-radius: 36px; padding: 40px 48px; z-index: 11;
+    overflow: hidden; background: linear-gradient(180deg, #1c2130, #141823);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 4000px rgba(5, 7, 10, .72), 0 40px 80px rgba(0, 0, 0, .5); }
+.search-panel h2 { font-size: 30px; color: var(--text); text-transform: none; letter-spacing: -.5px; font-weight: 700; margin-bottom: 22px; }
+.search-input { width: 100%; font: inherit; font-size: 30px; padding: 18px 26px; border-radius: 22px; border: 2px solid transparent;
+    background: rgba(255, 255, 255, .08); color: var(--text); outline: none; margin-bottom: 26px; }
+.search-input:focus { border-color: #fff; background: rgba(255, 255, 255, .12); }
+.search-input::placeholder { color: var(--text-3); }
+.search-results { display: flex; flex-wrap: wrap; }
+.sres { width: 380px; margin: 0 20px 22px 0; border-radius: 20px; padding: 10px; outline: none; transition: transform .15s ease-out; }
+.sres img { width: 360px; height: 202px; border-radius: 14px; display: block; background: #000; object-fit: cover; }
+.sres-title { font-size: 19px; font-weight: 600; margin-top: 10px; line-height: 1.3; max-height: 50px; overflow: hidden; }
+.sres-meta { font-size: 15px; color: var(--text-3); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sres:focus { background: #fff; color: #0b0e15; transform: scale(1.04); box-shadow: 0 16px 34px rgba(0, 0, 0, .5); }
+.sres:focus .sres-meta { color: rgba(0, 0, 0, .55); }
